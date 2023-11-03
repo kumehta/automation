@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Define the prefix for your environment variables
+PREFIX="MY_PREFIX_"
+
+# Define the directory containing the files to process
+FILES_DIR="/path/to/your/files"
+
+# Loop through the files in the directory
+for file in "$FILES_DIR"/*; do
+    if [ -f "$file" ]; then
+        # Iterate through environment variables with the specified prefix
+        for env_var in $(env | grep "^$PREFIX" | cut -d= -f1); do
+            placeholder="{{${env_var//$PREFIX/}}"
+            value="${!env_var}"
+            sed -i "s/$placeholder/$value/g" "$file"
+        done
+    fi
+done
