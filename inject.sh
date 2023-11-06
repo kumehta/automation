@@ -22,3 +22,5 @@ done
 
 # Sleep to keep the init container running
 sleep infinity
+
+#DD_COLLECT_KUBERNETES_EVENTS
