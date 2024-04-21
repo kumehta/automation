@@ -1,0 +1,65 @@
+name: Check Image Tags
+
+on:
+  schedule:
+    # Runs at 11:00 AM every Monday (UTC time)
+    - cron: '0 11 * * 1'
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  image-tag-comparison:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Install yq (YAML Processor)
+      run: sudo snap install yq
+
+    - name: Compare image tags in dev and prd
+      run: |
+        set -e
+        mismatched_dirs=()
+        echo "Checking directories for image tag mismatches..."
+        for dir in */; do
+          if [[ -d "$dir/base" && -d "$dir/patches" && -d "$dir/patches/dev" && -d "$dir/patches/prd" ]]; then
+            echo "Analyzing $dir..."
+            dev_yaml="$dir/patches/dev/kustomization.yaml"
+            prd_yaml="$dir/patches/prd/kustomization.yaml"
+            if [[ -f "$dev_yaml" && -f "$prd_yaml" ]]; then
+              if yq e 'has("images")' "$dev_yaml" && yq e 'has("images")' "$prd_yaml"; then
+                dev_tags=$(yq e '.images[] | .name + "=" + .newTag' "$dev_yaml" | sort)
+                prd_tags=$(yq e '.images[] | .name + "=" + .newTag' "$prd_yaml" | sort)
+                if ! diff <(echo "$dev_tags") <(echo "$prd_tags") > /dev/null; then
+                  echo "Image tag mismatch in $dir:"
+                  diff <(echo "$dev_tags") <(echo "$prd_tags")
+                  mismatched_dirs+=("$dir")
+                fi
+              else
+                echo "Skipping $dir as one or both kustomization.yaml files lack an 'images' section."
+              fi
+            else
+              echo "Missing kustomization.yaml in either dev or prd in $dir"
+            fi
+          else
+            echo "Missing required directories in $dir"
+          fi
+        done
+        if [ ${#mismatched_dirs[@]} -gt 0 ]; then
+          echo "Directories with mismatched image tags:"
+          printf '%s\n' "${mismatched_dirs[@]}"
+          MESSAGE="Mismatch found in directories: ${mismatched_dirs[*]}"
+          #curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"${MESSAGE}\"}" ${{ secrets.SLACK_WEBHOOK_URL }}
+        else
+          echo "No mismatches found, or all missing images sections were skipped."
+        fi
+
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
