@@ -37,7 +37,7 @@ jobs:
         echo "Checking directories for image tag mismatches..."
         for dir in */; do
           if [[ -d "$dir/base" && -d "$dir/patches" && -d "$dir/patches/dev" && -d "$dir/patches/prd" ]]; then
-            echo "Analyzing $dir..."
+            echo "Analyzing $dir"
             dev_yaml="$dir/patches/dev/kustomization.yaml"
             prd_yaml="$dir/patches/prd/kustomization.yaml"
             if [[ -f "$dev_yaml" && -f "$prd_yaml" ]]; then
@@ -48,13 +48,13 @@ jobs:
                 echo "Image tag mismatch in $dir:"
                 echo "$diff_result"
                 mismatched_dirs+=("$dir")
-                details+="$dir:\n"
+                details+="In $dir:\n"
                 while IFS= read -r line; do
                   if [[ "$line" =~ "<" ]]; then
                     image_name=$(echo "$line" | cut -d '=' -f 1 | tr -d '< ')
                     dev_tag=$(echo "$line" | cut -d '=' -f 2)
                     prd_tag=$(grep "$image_name=" <(echo "$prd_images") | cut -d '=' -f 2)
-                    details+="  $image_name: $dev_tag in dev, $prd_tag in prd\n"
+                    details+="  - $image_name: $dev_tag in dev, $prd_tag in prd\n"
                   fi
                 done <<< "$diff_result"
               fi
@@ -65,7 +65,7 @@ jobs:
           DAYS_SINCE_LAST_COMMIT=$(( ($CURRENT_DATE - $LAST_COMMIT_DATE) / 86400 ))
           if [ $DAYS_SINCE_LAST_COMMIT -ge 3 ]; then
             echo "Sending mismatch details to Slack..."
-            MESSAGE="Image tag mismatches found in:\n$details"
+            MESSAGE="Image tag mismatches found:\n$details"
             curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"${MESSAGE}\"}" ${{ secrets.SLACK_WEBHOOK_URL }}
           else
             echo "Last commit is less than 3 days ago, no alert sent."
